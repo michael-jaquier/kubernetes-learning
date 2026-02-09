@@ -8,8 +8,9 @@ This directory contains the Kubernetes manifest files for deploying the Go appli
 |------|---------|--------------|
 | `namespace.yaml` | Creates isolated environment | Organizes resources in a dedicated namespace |
 | `deployment.yaml` | Manages application pods | Ensures desired number of app replicas are running |
-| `service.yaml` | Provides stable network endpoint | Load balances traffic to application pods |
-| `ingress.yaml` | HTTP routing rules | Routes external traffic to services |
+| `service.yaml` | Provides stable network endpoint | Load balances traffic to application pods (NodePort for easy access) |
+
+**Note:** Ingress has been moved to `advanced/` directory. Start with the basics first!
 
 ## Deployment Order
 
@@ -18,14 +19,15 @@ While Kubernetes handles dependencies well, a logical order is:
 ```bash
 1. namespace.yaml      # Create the namespace first
 2. deployment.yaml     # Deploy the application
-3. service.yaml        # Expose the application
-4. ingress.yaml        # Configure external access (optional)
+3. service.yaml        # Expose the application (NodePort)
 ```
 
-Or apply all at once:
+Apply all at once:
 ```bash
 kubectl apply -f k8s/
 ```
+
+After deployment, access your app at: **http://localhost:30080**
 
 ## Quick Reference
 

@@ -35,6 +35,7 @@ spec:
   # NodePort: Exposes on each Node's IP at a static port (30000-32767)
   #   - Use for development or when you don't have a load balancer
   #   - Accessible from outside: <NodeIP>:<NodePort>
+  #   - With KIND, we can map this to localhost!
   #
   # LoadBalancer: Creates a cloud provider's load balancer
   #   - Use in production on cloud platforms (AWS, GCP, Azure)
@@ -43,7 +44,7 @@ spec:
   # ExternalName: Maps to a DNS name (advanced use case)
   #
   # Learn more: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
-  type: ClusterIP           # Internal only - accessed through Ingress or port-forward
+  type: NodePort            # Expose on node port - accessible from outside the cluster
 
   # ===================
   # POD SELECTOR
@@ -72,14 +73,17 @@ spec:
     targetPort: http        # Container port - where traffic is sent in the pod
                            # We use the named port 'http' from deployment.yaml
                            # Could also use a number: targetPort: 8080
+    nodePort: 30080         # External port on each node (30000-32767 range)
+                           # With KIND config, this maps to localhost:30080
 
-  # Flow of traffic:
-  # Client → Service IP:80 → Pod IP:8080
+  # Flow of traffic with NodePort:
+  # External Client → localhost:30080 → Node → Service IP:80 → Pod IP:8080
   #
   # Why different ports?
-  # - Standard convention: Services often use standard ports (80, 443)
-  # - Flexibility: Container can listen on any port
-  # - Abstraction: Change container port without changing how clients connect
+  # - nodePort (30080): External access point
+  # - port (80): Service port inside cluster
+  # - targetPort (8080): Actual container port
+  # This layering provides flexibility and abstraction
 
   # ===================
   # SESSION AFFINITY
@@ -112,12 +116,19 @@ spec:
 # ===================
 # TESTING THE SERVICE
 # ===================
+# From your local machine (NodePort):
+#   curl http://localhost:30080
+#   # Or visit in browser: http://localhost:30080
+#
 # From inside the cluster:
 #   kubectl run test-pod --image=curlimages/curl:latest --rm -it -- curl http://go-app-service.go-demo
 #
-# From outside (port-forward):
+# Alternative - port-forward (maps any port you want):
 #   kubectl port-forward -n go-demo service/go-app-service 8080:80
 #   curl http://localhost:8080
 #
-# View endpoints:
+# View endpoints (shows pod IPs):
 #   kubectl get endpoints -n go-demo go-app-service
+#
+# View service details:
+#   kubectl get service go-app-service -n go-demo

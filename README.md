@@ -91,6 +91,7 @@ kind-go-nginx-demo/
 ├── README.md                 # This file
 ├── KUBERNETES.md            # Kubernetes concepts explained
 ├── KUBECTL.md               # kubectl primer and command reference
+├── NETWORKING.md            # Networking and service access explained
 ├── Makefile                 # Build and deployment automation
 ├── kind-config.yaml         # KIND cluster configuration
 ├── local-registry.sh        # Local registry setup script
@@ -103,8 +104,8 @@ kind-go-nginx-demo/
     ├── README.md           # Kubernetes manifests guide
     ├── namespace.yaml      # Namespace definition
     ├── deployment.yaml     # Application deployment
-    ├── service.yaml        # Service definition
-    └── ingress.yaml        # Ingress/routing rules
+    ├── service.yaml        # Service definition (NodePort)
+    └── advanced/           # Advanced topics (Ingress, etc.)
 ```
 
 ## Quick Start
@@ -132,11 +133,13 @@ make deploy
 
 ### 4. Access the application
 
+The app is automatically accessible at:
 ```bash
-# Port-forward to access locally
-make port-forward
+# Direct access via NodePort (easiest!)
+http://localhost:30080
 
-# Then visit http://localhost:8080 in your browser
+# Or use port-forward for custom port
+make port-forward       # Maps to http://localhost:8080
 ```
 
 ### 5. Clean up

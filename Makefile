@@ -207,13 +207,18 @@ deploy: ## Deploy application to Kubernetes
 	@kubectl apply -f k8s/namespace.yaml
 	@kubectl apply -f k8s/deployment.yaml
 	@kubectl apply -f k8s/service.yaml
-	@kubectl apply -f k8s/ingress.yaml
 	@echo "$(GREEN)✓ Application deployed$(NC)"
 	@echo ""
 	@echo "$(CYAN)Waiting for pods to be ready...$(NC)"
 	@kubectl wait --for=condition=ready pod -l app=go-app -n $(NAMESPACE) --timeout=60s
 	@echo "$(GREEN)✓ Pods are ready!$(NC)"
+	@echo ""
 	@make status
+	@echo ""
+	@echo "$(GREEN)========================================$(NC)"
+	@echo "$(GREEN)✓ Access your app at:$(NC)"
+	@echo "$(GREEN)  http://localhost:30080$(NC)"
+	@echo "$(GREEN)========================================$(NC)"
 
 .PHONY: redeploy
 redeploy: build-push rollout ## Rebuild, push, and rolling restart
@@ -344,10 +349,13 @@ up: cluster-create build-push deploy ## Complete setup: create cluster, build, a
 	@echo "$(GREEN)✓ Setup complete!$(NC)"
 	@echo "$(GREEN)========================================$(NC)"
 	@echo ""
-	@echo "$(CYAN)Next steps:$(NC)"
-	@echo "  1. Run: $(GREEN)make port-forward$(NC)"
-	@echo "  2. Visit: $(GREEN)http://localhost:8080$(NC)"
-	@echo "  3. View logs: $(GREEN)make logs$(NC)"
+	@echo "$(CYAN)Your app is running at:$(NC)"
+	@echo "  $(GREEN)http://localhost:30080$(NC)"
+	@echo ""
+	@echo "$(CYAN)Useful commands:$(NC)"
+	@echo "  $(GREEN)make logs$(NC)         - View application logs"
+	@echo "  $(GREEN)make status$(NC)       - Check deployment status"
+	@echo "  $(GREEN)make scale-up$(NC)     - Scale to 5 replicas"
 	@echo ""
 
 .PHONY: down
