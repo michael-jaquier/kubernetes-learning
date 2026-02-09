@@ -1,0 +1,311 @@
+# StatefulSet Example with Persistent Storage
+#
+# StatefulSets are used for stateful applications that need:
+# - Stable, unique network identifiers
+# - Stable, persistent storage
+# - Ordered, graceful deployment and scaling
+# - Ordered, automated rolling updates
+#
+# Unlike Deployments, StatefulSets automatically create a PVC for each replica!
+#
+# Use cases: Databases, messaging queues, distributed systems (Kafka, Cassandra,
+# MongoDB, Elasticsearch, ZooKeeper, etc.)
+#
+# Learn more: https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: stateful-demo
+  namespace: go-demo
+  labels:
+    app: stateful-demo
+spec:
+  # ===================
+  # HEADLESS SERVICE
+  # ===================
+  # StatefulSets require a headless service (clusterIP: None)
+  # This creates DNS records for each pod: pod-0.service-name, pod-1.service-name, etc.
+  clusterIP: None
+  selector:
+    app: stateful-demo
+  ports:
+  - port: 80
+    targetPort: 80
+    name: web
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: stateful-demo
+  namespace: go-demo
+  labels:
+    app: stateful-demo
+spec:
+  # ===================
+  # SERVICE NAME
+  # ===================
+  # Links to the headless service above
+  # Creates DNS: stateful-demo-0.stateful-demo.go-demo.svc.cluster.local
+  serviceName: "stateful-demo"
+
+  # ===================
+  # REPLICAS
+  # ===================
+  # Each replica gets its own PVC automatically!
+  replicas: 3
+
+  selector:
+    matchLabels:
+      app: stateful-demo
+
+  # ===================
+  # POD TEMPLATE
+  # ===================
+  template:
+    metadata:
+      labels:
+        app: stateful-demo
+    spec:
+      containers:
+      - name: app
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+          name: web
+
+        # ===================
+        # VOLUME MOUNT
+        # ===================
+        # Mount the automatically created PVC
+        volumeMounts:
+        - name: data
+          mountPath: /usr/share/nginx/html
+
+        # Lifecycle hook to write pod name to storage
+        lifecycle:
+          postStart:
+            exec:
+              command:
+                - sh
+                - -c
+                - echo "Hello from $(hostname)" > /usr/share/nginx/html/index.html
+
+  # ===================
+  # VOLUME CLAIM TEMPLATES
+  # ===================
+  # This is the magic! StatefulSet automatically creates a PVC for each pod.
+  # - Pod stateful-demo-0 gets PVC: data-stateful-demo-0
+  # - Pod stateful-demo-1 gets PVC: data-stateful-demo-1
+  # - Pod stateful-demo-2 gets PVC: data-stateful-demo-2
+  #
+  # Each pod gets its OWN persistent storage!
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        app: stateful-demo
+    spec:
+      accessModes:
+        - ReadWriteOnce
+
+      # Use dynamic provisioning (recommended)
+      storageClassName: standard
+
+      resources:
+        requests:
+          storage: 1Gi
+
+# ===================
+# KEY DIFFERENCES: StatefulSet vs Deployment
+# ===================
+#
+# STATEFULSET:
+# ✓ Stable network identity (pod-0, pod-1, pod-2)
+# ✓ Stable hostname (doesn't change across restarts)
+# ✓ Ordered deployment (0 → 1 → 2)
+# ✓ Ordered termination (2 → 1 → 0)
+# ✓ Each pod gets its own PVC (automatic)
+# ✓ PVCs persist after pod deletion
+#
+# DEPLOYMENT:
+# ✓ Random pod names (pod-abc123, pod-def456)
+# ✓ No hostname stability
+# ✓ Parallel deployment (all at once)
+# ✓ No ordered termination
+# ✓ Shared PVC across all replicas (manual setup)
+# ✓ Typically stateless
+
+# ===================
+# POD NAMING
+# ===================
+# StatefulSet pods have predictable names:
+# - stateful-demo-0
+# - stateful-demo-1
+# - stateful-demo-2
+#
+# They always have the same name, even after restart!
+
+# ===================
+# DNS RECORDS
+# ===================
+# Each pod gets a DNS record:
+# - stateful-demo-0.stateful-demo.go-demo.svc.cluster.local
+# - stateful-demo-1.stateful-demo.go-demo.svc.cluster.local
+# - stateful-demo-2.stateful-demo.go-demo.svc.cluster.local
+#
+# This allows direct addressing of specific pods (important for databases!)
+
+# ===================
+# SCALING
+# ===================
+# Scale up (adds pods in order):
+#   kubectl scale statefulset stateful-demo --replicas=5 -n go-demo
+#   # Creates: stateful-demo-3, then stateful-demo-4
+#
+# Scale down (removes pods in reverse order):
+#   kubectl scale statefulset stateful-demo --replicas=2 -n go-demo
+#   # Deletes: stateful-demo-4, then stateful-demo-3
+#
+# PVCs are NOT deleted when scaling down!
+# If you scale back up, pods reattach to their old PVCs.
+
+# ===================
+# UPDATES
+# ===================
+# Update strategy: RollingUpdate (default)
+# Updates pods in reverse order: 2 → 1 → 0
+#
+# kubectl set image statefulset/stateful-demo app=nginx:latest -n go-demo
+#
+# Other strategy: OnDelete (manual update - delete pods yourself)
+
+# ===================
+# VIEWING RESOURCES
+# ===================
+# View StatefulSet:
+#   kubectl get statefulset -n go-demo
+#
+# View pods (notice ordered names):
+#   kubectl get pods -n go-demo -l app=stateful-demo
+#
+# View automatically created PVCs:
+#   kubectl get pvc -n go-demo
+#   # You'll see: data-stateful-demo-0, data-stateful-demo-1, data-stateful-demo-2
+#
+# Describe StatefulSet:
+#   kubectl describe statefulset stateful-demo -n go-demo
+
+# ===================
+# TESTING PERSISTENCE
+# ===================
+# 1. Deploy StatefulSet:
+#    kubectl apply -f k8s/advanced/storage/statefulset-example.yaml
+#
+# 2. Wait for pods:
+#    kubectl wait --for=condition=ready pod -n go-demo -l app=stateful-demo --timeout=120s
+#
+# 3. Check pod data:
+#    kubectl exec -n go-demo stateful-demo-0 -- cat /usr/share/nginx/html/index.html
+#
+# 4. Delete a pod:
+#    kubectl delete pod stateful-demo-0 -n go-demo
+#
+# 5. Pod recreates with SAME name and SAME PVC:
+#    kubectl get pods -n go-demo -l app=stateful-demo
+#
+# 6. Data is still there:
+#    kubectl exec -n go-demo stateful-demo-0 -- cat /usr/share/nginx/html/index.html
+
+# ===================
+# CLEANUP
+# ===================
+# Delete StatefulSet:
+#   kubectl delete statefulset stateful-demo -n go-demo
+#
+# IMPORTANT: This does NOT delete PVCs!
+# Delete PVCs manually:
+#   kubectl delete pvc -n go-demo -l app=stateful-demo
+#
+# Delete service:
+#   kubectl delete service stateful-demo -n go-demo
+#
+# Or delete everything at once:
+#   kubectl delete -f k8s/advanced/storage/statefulset-example.yaml
+#   kubectl delete pvc -n go-demo -l app=stateful-demo
+
+# ===================
+# PRODUCTION EXAMPLE: PostgreSQL
+# ===================
+# This is a real-world pattern for running PostgreSQL in Kubernetes:
+#
+# apiVersion: apps/v1
+# kind: StatefulSet
+# metadata:
+#   name: postgres
+# spec:
+#   serviceName: postgres
+#   replicas: 3
+#   selector:
+#     matchLabels:
+#       app: postgres
+#   template:
+#     metadata:
+#       labels:
+#         app: postgres
+#     spec:
+#       containers:
+#       - name: postgres
+#         image: postgres:15
+#         env:
+#         - name: POSTGRES_PASSWORD
+#           valueFrom:
+#             secretKeyRef:
+#               name: postgres-secret
+#               key: password
+#         - name: PGDATA
+#           value: /var/lib/postgresql/data/pgdata
+#         ports:
+#         - containerPort: 5432
+#           name: postgres
+#         volumeMounts:
+#         - name: data
+#           mountPath: /var/lib/postgresql/data
+#   volumeClaimTemplates:
+#   - metadata:
+#       name: data
+#     spec:
+#       accessModes: ["ReadWriteOnce"]
+#       storageClassName: standard
+#       resources:
+#         requests:
+#           storage: 10Gi
+
+# ===================
+# WHEN TO USE STATEFULSET
+# ===================
+# ✅ Use StatefulSet when:
+# - Running databases (PostgreSQL, MySQL, MongoDB)
+# - Running distributed systems (Kafka, Cassandra, Elasticsearch)
+# - Need stable network identity
+# - Need persistent storage per pod
+# - Need ordered deployment/scaling
+#
+# ❌ Use Deployment when:
+# - Stateless applications
+# - Don't need stable identity
+# - Don't need per-pod storage
+# - Web servers, API servers, workers
+
+# ===================
+# BEST PRACTICES
+# ===================
+# 1. Always use headless service with StatefulSets
+# 2. Use volumeClaimTemplates for automatic PVC creation
+# 3. Set proper resource limits
+# 4. Use readiness/liveness probes
+# 5. Plan for backups (PVCs can fail!)
+# 6. Use anti-affinity to spread pods across nodes
+# 7. Monitor storage usage
+# 8. Test disaster recovery procedures

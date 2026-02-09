@@ -89,7 +89,48 @@ make test-secrets
 
 ---
 
-### 4. Ingress - HTTP Routing (Optional)
+### 5. Persistent Storage - Data that Survives
+
+**Directory:** `storage/`
+
+**What it does:** Provides persistent storage that survives pod restarts, deletions, and rescheduling.
+
+**Why use it:**
+- Data persists across pod lifecycle
+- Essential for databases and stateful apps
+- Enables data sharing between pods
+- Supports backups and disaster recovery
+
+**Contains:**
+- `local-pv.yaml` - Manual Persistent Volume creation
+- `pvc.yaml` - Persistent Volume Claim (storage request)
+- `deployment-with-storage.yaml` - Using PVC in a deployment
+- `statefulset-example.yaml` - StatefulSet with automatic PVC creation per pod
+
+**Try it:**
+```bash
+# Test basic persistence (data survives pod deletion)
+make test-storage
+
+# Test StatefulSet (each pod gets its own storage)
+make test-statefulset
+
+# View storage information
+make storage-info
+```
+
+**Key concepts:**
+- **PV**: The actual storage (disk)
+- **PVC**: Request for storage
+- **StorageClass**: Template for dynamic provisioning
+- **StatefulSet**: Manages pods with stable storage
+
+**Learn more:**
+- [Persistent Volumes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/)
+- [StatefulSets](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/)
+- See `storage/README.md` for detailed guide
+
+---
 
 **What it does:** Routes external HTTP traffic to services based on hostname/path rules.
 

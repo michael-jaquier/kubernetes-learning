@@ -1,0 +1,219 @@
+# StorageClass - Storage Provisioner Configuration
+#
+# A StorageClass defines the "class" or "tier" of storage and how to provision it.
+# It enables dynamic provisioning - PVs are created automatically when you create a PVC.
+#
+# KIND comes with a default StorageClass, so you usually don't need to create one.
+# This file is for learning and custom storage configurations.
+#
+# Learn more: https://kubernetes.io/docs/concepts/storage/storage-classes/
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-local
+  annotations:
+    # Make this the default StorageClass (optional)
+    # storageclass.kubernetes.io/is-default-class: "true"
+  labels:
+    type: local
+
+# ===================
+# PROVISIONER
+# ===================
+# Which storage plugin to use for creating volumes
+#
+# KIND default:
+provisioner: rancher.io/local-path
+
+# Cloud providers:
+#   AWS EBS: ebs.csi.aws.com
+#   GCP PD: pd.csi.storage.gke.io
+#   Azure Disk: disk.csi.azure.com
+#
+# Network storage:
+#   NFS: nfs.csi.k8s.io
+#   Ceph RBD: rbd.csi.ceph.com
+#   CephFS: cephfs.csi.ceph.com
+#
+# Other:
+#   Local: kubernetes.io/no-provisioner (manual PVs)
+#   HostPath: Not recommended for production
+
+# ===================
+# RECLAIM POLICY
+# ===================
+# What happens to dynamically provisioned PV when PVC is deleted
+reclaimPolicy: Delete    # Delete the PV and underlying storage
+# reclaimPolicy: Retain  # Keep the PV and data for manual recovery
+
+# ===================
+# VOLUME BINDING MODE
+# ===================
+# When to bind PVC to PV and provision storage
+volumeBindingMode: WaitForFirstConsumer
+# WaitForFirstConsumer: Wait until pod using PVC is scheduled
+#   - Ensures volume is created in same zone as pod
+#   - Better for multi-zone clusters
+#   - Recommended for cloud
+#
+# Immediate: Bind and provision as soon as PVC is created
+#   - Faster initial binding
+#   - May create volume in wrong zone
+#   - OK for single-zone clusters
+
+# ===================
+# ALLOW VOLUME EXPANSION
+# ===================
+# Can PVCs be resized after creation?
+allowVolumeExpansion: true
+# Note: Only supports expansion, not shrinking!
+# Requires storage backend support
+
+# ===================
+# MOUNT OPTIONS
+# ===================
+# Options passed to mount command
+# mountOptions:
+#   - debug
+#   - nfsvers=4.1
+
+# ===================
+# PARAMETERS
+# ===================
+# Provider-specific options
+# These vary by provisioner
+parameters:
+  # Local path provisioner (KIND default)
+  nodePath: /var/local-path-provisioner  # Where to store volumes on node
+
+  # AWS EBS example:
+  # type: gp3              # Volume type (gp2, gp3, io1, io2, st1, sc1)
+  # iopsPerGB: "10"        # IOPS per GB (io1, io2)
+  # encrypted: "true"      # Enable encryption
+  # kmsKeyId: arn:aws:...  # KMS key for encryption
+  # fsType: ext4           # Filesystem type
+
+  # GCP PD example:
+  # type: pd-ssd           # pd-standard (HDD) or pd-ssd (SSD)
+  # replication-type: regional-pd  # Replicated across zones
+  # fsType: ext4
+
+  # Azure Disk example:
+  # storageaccounttype: Premium_LRS  # Standard_LRS, Premium_LRS
+  # kind: Managed          # Managed or Shared
+  # fsType: ext4
+
+# ===================
+# ALLOWED TOPOLOGIES
+# ===================
+# Restrict which zones/regions can be used
+# allowedTopologies:
+# - matchLabelExpressions:
+#   - key: topology.kubernetes.io/zone
+#     values:
+#     - us-east-1a
+#     - us-east-1b
+
+# ===================
+# USING STORAGECLASS
+# ===================
+# In PVC, specify:
+#   storageClassName: fast-local
+#
+# Or omit to use default StorageClass:
+#   storageClassName: ""
+
+# ===================
+# VIEWING STORAGECLASSES
+# ===================
+# List all:
+#   kubectl get storageclass
+#   kubectl get sc  # shorthand
+#
+# See default:
+#   kubectl get sc -o yaml | grep "is-default-class"
+#
+# Describe:
+#   kubectl describe sc fast-local
+#
+# View as YAML:
+#   kubectl get sc fast-local -o yaml
+
+# ===================
+# CREATING STORAGECLASS
+# ===================
+# Apply this file:
+#   kubectl apply -f k8s/advanced/storage/storageclass.yaml
+#
+# Make it default:
+#   kubectl patch storageclass fast-local -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+#
+# Remove default from old class:
+#   kubectl patch storageclass standard -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
+
+# ===================
+# STORAGECLASS TIERS (Example)
+# ===================
+# Common pattern: Multiple classes for different needs
+#
+# Fast/Premium (SSD):
+#   - Databases
+#   - High IOPS workloads
+#   - Expensive
+#
+# Standard (HDD):
+#   - General purpose
+#   - Log files
+#   - Backups
+#   - Cheaper
+#
+# Archive (Infrequent access):
+#   - Long-term storage
+#   - Rarely accessed data
+#   - Cheapest
+
+# ===================
+# DYNAMIC PROVISIONING FLOW
+# ===================
+# 1. User creates PVC referencing StorageClass
+# 2. StorageClass provisioner creates PV automatically
+# 3. PV is bound to PVC
+# 4. Pod uses PVC
+#
+# Compare to static provisioning:
+# 1. Admin manually creates PV
+# 2. User creates PVC
+# 3. Kubernetes binds PVC to existing PV
+# 4. Pod uses PVC
+
+# ===================
+# KIND DEFAULT STORAGECLASS
+# ===================
+# KIND includes "standard" StorageClass by default:
+#   provisioner: rancher.io/local-path
+#   reclaimPolicy: Delete
+#   volumeBindingMode: WaitForFirstConsumer
+#
+# View it:
+#   kubectl get sc standard -o yaml
+#
+# You can use it without creating this custom one!
+
+# ===================
+# WHEN TO CREATE CUSTOM STORAGECLASS
+# ===================
+# - Different performance tiers (SSD vs HDD)
+# - Different availability zones
+# - Different encryption settings
+# - Different reclaim policies
+# - Provider-specific optimizations
+#
+# For learning: The default KIND StorageClass works fine!
+
+# ===================
+# DELETE STORAGECLASS
+# ===================
+# kubectl delete sc fast-local
+#
+# Warning: Doesn't delete existing PVs/PVCs using this class!

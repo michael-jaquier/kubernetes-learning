@@ -395,6 +395,120 @@ test-secrets: ## Test Secrets are loaded in pods
 		echo "$(YELLOW)Create it with: kubectl apply -f k8s/advanced/secret.yaml$(NC)"; \
 	fi
 
+.PHONY: test-storage
+test-storage: ## Test persistent storage (data survives pod deletion)
+	@echo "$(CYAN)========================================$(NC)"
+	@echo "$(CYAN)Testing Persistent Storage$(NC)"
+	@echo "$(CYAN)========================================$(NC)"
+	@echo ""
+	@echo "$(CYAN)Step 1: Checking if storage demo is deployed...$(NC)"
+	@if ! kubectl get deployment storage-demo -n $(NAMESPACE) >/dev/null 2>&1; then \
+		echo "$(YELLOW)Storage demo not found. Deploying...$(NC)"; \
+		kubectl apply -f k8s/advanced/storage/pvc.yaml; \
+		kubectl apply -f k8s/advanced/storage/deployment-with-storage.yaml; \
+		echo "$(CYAN)Waiting for pod to be ready...$(NC)"; \
+		kubectl wait --for=condition=ready pod -n $(NAMESPACE) -l app=storage-demo --timeout=60s; \
+	fi
+	@echo "$(GREEN)✓ Storage demo is running$(NC)"
+	@echo ""
+	@echo "$(CYAN)Step 2: Writing test data to persistent volume...$(NC)"
+	@kubectl exec -n $(NAMESPACE) deployment/storage-demo -- sh -c "echo 'Data written at: $$(date)' > /data/test.txt"
+	@kubectl exec -n $(NAMESPACE) deployment/storage-demo -- sh -c "echo 'This data should persist across pod restarts!' >> /data/test.txt"
+	@echo "$(GREEN)✓ Data written$(NC)"
+	@echo ""
+	@echo "$(CYAN)Step 3: Reading data from volume...$(NC)"
+	@kubectl exec -n $(NAMESPACE) deployment/storage-demo -- cat /data/test.txt
+	@echo ""
+	@echo "$(CYAN)Step 4: Getting current pod name...$(NC)"
+	@POD=$$(kubectl get pod -n $(NAMESPACE) -l app=storage-demo -o jsonpath='{.items[0].metadata.name}'); \
+	echo "Current pod: $$POD"; \
+	echo ""; \
+	echo "$(CYAN)Step 5: Deleting pod to test persistence...$(NC)"; \
+	kubectl delete pod $$POD -n $(NAMESPACE); \
+	echo "$(YELLOW)Waiting for new pod to start...$(NC)"; \
+	kubectl wait --for=condition=ready pod -n $(NAMESPACE) -l app=storage-demo --timeout=60s; \
+	echo "$(GREEN)✓ New pod is ready$(NC)"; \
+	echo ""; \
+	NEWPOD=$$(kubectl get pod -n $(NAMESPACE) -l app=storage-demo -o jsonpath='{.items[0].metadata.name}'); \
+	echo "New pod: $$NEWPOD"; \
+	echo ""; \
+	echo "$(CYAN)Step 6: Reading data from new pod...$(NC)"; \
+	kubectl exec -n $(NAMESPACE) deployment/storage-demo -- cat /data/test.txt; \
+	echo ""; \
+	echo "$(GREEN)========================================$(NC)"; \
+	echo "$(GREEN)✓ Success! Data persisted across pod deletion$(NC)"; \
+	echo "$(GREEN)========================================$(NC)"; \
+	echo ""; \
+	echo "$(CYAN)Bonus: Check PVC and PV status$(NC)"; \
+	kubectl get pvc -n $(NAMESPACE) | grep app-pvc || echo "$(YELLOW)PVC not found - using dynamic provisioning$(NC)"; \
+	echo ""
+
+.PHONY: test-statefulset
+test-statefulset: ## Test StatefulSet with automatic PVC creation
+	@echo "$(CYAN)========================================$(NC)"
+	@echo "$(CYAN)Testing StatefulSet with Storage$(NC)"
+	@echo "$(CYAN)========================================$(NC)"
+	@echo ""
+	@echo "$(CYAN)Step 1: Deploying StatefulSet...$(NC)"
+	@kubectl apply -f k8s/advanced/storage/statefulset-example.yaml
+	@echo "$(CYAN)Waiting for pods to be ready (this may take a minute)...$(NC)"
+	@kubectl wait --for=condition=ready pod -n $(NAMESPACE) -l app=stateful-demo --timeout=120s
+	@echo "$(GREEN)✓ StatefulSet deployed$(NC)"
+	@echo ""
+	@echo "$(CYAN)Step 2: Listing pods (notice ordered names)...$(NC)"
+	@kubectl get pods -n $(NAMESPACE) -l app=stateful-demo
+	@echo ""
+	@echo "$(CYAN)Step 3: Listing automatically created PVCs...$(NC)"
+	@kubectl get pvc -n $(NAMESPACE) -l app=stateful-demo
+	@echo ""
+	@echo "$(CYAN)Step 4: Testing pod-specific data...$(NC)"
+	@for i in 0 1 2; do \
+		echo "Reading from stateful-demo-$$i:"; \
+		kubectl exec -n $(NAMESPACE) stateful-demo-$$i -- cat /usr/share/nginx/html/index.html 2>/dev/null || echo "Pod not ready"; \
+		echo ""; \
+	done
+	@echo "$(GREEN)✓ Each pod has its own persistent storage!$(NC)"
+	@echo ""
+	@echo "$(CYAN)Step 5: Testing persistence by deleting pod-0...$(NC)"
+	@kubectl delete pod stateful-demo-0 -n $(NAMESPACE)
+	@echo "$(CYAN)Waiting for pod to recreate...$(NC)"
+	@sleep 5
+	@kubectl wait --for=condition=ready pod -n $(NAMESPACE) stateful-demo-0 --timeout=60s
+	@echo "$(GREEN)✓ Pod recreated with same name$(NC)"
+	@echo ""
+	@echo "$(CYAN)Step 6: Verifying data persisted...$(NC)"
+	@kubectl exec -n $(NAMESPACE) stateful-demo-0 -- cat /usr/share/nginx/html/index.html
+	@echo ""
+	@echo "$(GREEN)========================================$(NC)"
+	@echo "$(GREEN)✓ StatefulSet test complete!$(NC)"
+	@echo "$(GREEN)  Each pod has stable identity + storage$(NC)"
+	@echo "$(GREEN)========================================$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Cleanup: kubectl delete -f k8s/advanced/storage/statefulset-example.yaml$(NC)"
+	@echo "$(YELLOW)         kubectl delete pvc -n $(NAMESPACE) -l app=stateful-demo$(NC)"
+
+.PHONY: storage-info
+storage-info: ## Show storage information (PVs, PVCs, StorageClasses)
+	@echo "$(CYAN)========================================$(NC)"
+	@echo "$(CYAN)Storage Information$(NC)"
+	@echo "$(CYAN)========================================$(NC)"
+	@echo ""
+	@echo "$(CYAN)Storage Classes:$(NC)"
+	@kubectl get storageclass
+	@echo ""
+	@echo "$(CYAN)Persistent Volumes:$(NC)"
+	@kubectl get pv
+	@echo ""
+	@echo "$(CYAN)Persistent Volume Claims (namespace: $(NAMESPACE)):$(NC)"
+	@kubectl get pvc -n $(NAMESPACE)
+	@echo ""
+	@echo "$(CYAN)Storage usage in pods:$(NC)"
+	@for pod in $$(kubectl get pods -n $(NAMESPACE) -o name 2>/dev/null); do \
+		echo "$$pod:"; \
+		kubectl exec -n $(NAMESPACE) $$pod -- df -h 2>/dev/null | grep -E '(Filesystem|/data|/var/lib)' || echo "  No mounted volumes"; \
+		echo ""; \
+	done
+
 .PHONY: test-all
 test-all: test-health test-api ## Run all tests
 

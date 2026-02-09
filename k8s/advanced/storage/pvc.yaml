@@ -1,0 +1,176 @@
+# Persistent Volume Claim - Storage Request
+#
+# A PersistentVolumeClaim (PVC) is a request for storage by a user.
+# It's like a "shopping request" - you specify what you need, and
+# Kubernetes finds a suitable PersistentVolume to bind to.
+#
+# Think of it as:
+# - PV = The actual storage (disk)
+# - PVC = Your request/reservation for storage
+# - Pod = Uses the PVC to access storage
+#
+# Learn more: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#persistentvolumeclaims
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-pvc
+  namespace: go-demo
+  labels:
+    app: go-demo
+spec:
+  # ===================
+  # ACCESS MODES
+  # ===================
+  # How you want to use the storage (must match available PV)
+  # - ReadWriteOnce (RWO): Single node read-write
+  # - ReadOnlyMany (ROX): Multiple nodes read-only
+  # - ReadWriteMany (RWX): Multiple nodes read-write
+  accessModes:
+    - ReadWriteOnce
+
+  # ===================
+  # STORAGE CLASS
+  # ===================
+  # Which storage class to use
+  # - Omit or set to "" for default storage class
+  # - Set to "manual" to match our local-pv.yaml
+  # - Set to specific class for dynamic provisioning
+  storageClassName: manual
+
+  # If using dynamic provisioning (recommended for production):
+  # storageClassName: standard  # KIND's default storage class
+  # This automatically creates a PV for you!
+
+  # ===================
+  # RESOURCE REQUESTS
+  # ===================
+  # How much storage you need
+  resources:
+    requests:
+      storage: 1Gi        # Request 1 Gibibyte
+                         # Must be ≤ available PV capacity
+
+  # You can also set limits (optional):
+  # limits:
+  #   storage: 2Gi       # Maximum storage
+
+  # ===================
+  # SELECTOR (Optional)
+  # ===================
+  # Fine-tune which PV to bind to using labels
+  # Uncomment to only match PVs with specific labels
+  #
+  # selector:
+  #   matchLabels:
+  #     type: local
+  #   matchExpressions:
+  #   - key: environment
+  #     operator: In
+  #     values:
+  #     - dev
+  #     - staging
+
+  # ===================
+  # VOLUME MODE (Optional)
+  # ===================
+  # How the volume should be consumed
+  # volumeMode: Filesystem  # Default - mount as directory
+  # volumeMode: Block       # Raw block device (advanced)
+
+# ===================
+# BINDING PROCESS
+# ===================
+# When you create a PVC, Kubernetes looks for a PV that matches:
+# 1. Access mode (ReadWriteOnce, etc.)
+# 2. Storage class name
+# 3. Capacity (PV must be ≥ requested)
+# 4. Selector (if specified)
+#
+# If found: PVC → Bound status
+# If not found: PVC → Pending status (waiting for suitable PV)
+
+# ===================
+# USING IN PODS
+# ===================
+# Once bound, use the PVC in a pod:
+#
+# volumes:
+# - name: my-storage
+#   persistentVolumeClaim:
+#     claimName: app-pvc
+#
+# containers:
+# - name: app
+#   volumeMounts:
+#   - name: my-storage
+#     mountPath: /data
+
+# ===================
+# CHECKING STATUS
+# ===================
+# View PVCs:
+#   kubectl get pvc -n go-demo
+#
+# Detailed info:
+#   kubectl describe pvc app-pvc -n go-demo
+#
+# Check which PV it's bound to:
+#   kubectl get pvc app-pvc -n go-demo -o yaml | grep volumeName
+#
+# Expected output:
+#   NAME      STATUS   VOLUME     CAPACITY   ACCESS MODES   STORAGECLASS
+#   app-pvc   Bound    local-pv   1Gi        RWO            manual
+
+# ===================
+# DYNAMIC PROVISIONING EXAMPLE
+# ===================
+# For easier setup, use dynamic provisioning:
+#
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata:
+#   name: app-pvc-dynamic
+#   namespace: go-demo
+# spec:
+#   accessModes:
+#     - ReadWriteOnce
+#   storageClassName: standard  # KIND's default
+#   resources:
+#     requests:
+#       storage: 1Gi
+#
+# No need to create PV manually - it's created automatically!
+
+# ===================
+# EXPANSION (Optional)
+# ===================
+# Some storage classes allow volume expansion
+# To enable, the StorageClass must have:
+#   allowVolumeExpansion: true
+#
+# Then you can edit the PVC and increase storage:
+#   kubectl edit pvc app-pvc -n go-demo
+#   # Change: storage: 1Gi → storage: 2Gi
+
+# ===================
+# CLEANUP
+# ===================
+# Delete PVC:
+#   kubectl delete pvc app-pvc -n go-demo
+#
+# What happens to PV depends on reclaim policy:
+# - Retain: PV remains with data (manual cleanup)
+# - Delete: PV and data are deleted
+# - Recycle: Data scrubbed, PV available again (deprecated)
+
+# ===================
+# BEST PRACTICES
+# ===================
+# 1. Use dynamic provisioning when possible (less manual work)
+# 2. Request only the storage you need (costs money in cloud)
+# 3. Match access mode to your use case (most apps use RWO)
+# 4. Use StorageClasses to categorize storage tiers
+# 5. Monitor PVC usage to prevent running out of space
+# 6. Backup important data (PVs can fail)
+# 7. Set appropriate reclaim policy (Retain for prod data)

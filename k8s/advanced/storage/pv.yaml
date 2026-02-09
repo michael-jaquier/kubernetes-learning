@@ -1,0 +1,219 @@
+# PersistentVolume (PV) - Actual Storage
+#
+# A PV represents actual storage in the cluster. It's the physical (or virtual)
+# disk space that backs PersistentVolumeClaims.
+#
+# NOTE: With dynamic provisioning (KIND default), you usually DON'T create PVs manually.
+# The StorageClass creates them automatically when you create a PVC.
+#
+# This file is for learning how PVs work and for static provisioning scenarios.
+#
+# Learn more: https://kubernetes.io/docs/concepts/storage/persistent-volumes/
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: app-data-pv
+  labels:
+    type: local
+    app: go-app
+spec:
+  # ===================
+  # CAPACITY
+  # ===================
+  # How much storage this PV provides
+  capacity:
+    storage: 1Gi    # This must match or exceed PVC request
+
+  # ===================
+  # ACCESS MODES
+  # ===================
+  # Must include all modes requested by PVCs that will bind to this PV
+  accessModes:
+    - ReadWriteOnce
+
+  # ===================
+  # RECLAIM POLICY
+  # ===================
+  # What happens to the PV when the PVC is deleted:
+  #
+  # Retain: Keep the PV and its data (manual cleanup required)
+  #   - Safest option
+  #   - Admin must manually reclaim
+  #   - Data preserved for recovery
+  #
+  # Delete: Automatically delete PV and underlying storage
+  #   - Default for dynamic provisioning
+  #   - Convenient but data is lost
+  #   - Common in cloud environments
+  #
+  # Recycle: Deprecated, do not use
+  #   - Performs basic scrub (rm -rf)
+  #   - Replaced by dynamic provisioning
+  persistentVolumeReclaimPolicy: Retain
+
+  # ===================
+  # STORAGE CLASS
+  # ===================
+  # Associates this PV with a StorageClass
+  # PVCs requesting this class can bind to this PV
+  storageClassName: manual
+
+  # ===================
+  # VOLUME TYPE
+  # ===================
+  # The actual storage backend
+  # Different types for different environments:
+
+  # hostPath: Uses a directory on the node (KIND, development only!)
+  hostPath:
+    path: "/mnt/data/go-app"    # Path on the KIND node
+    type: DirectoryOrCreate     # Create if doesn't exist
+
+  # Other common types:
+  #
+  # Cloud:
+  #   awsElasticBlockStore:  # AWS EBS
+  #     volumeID: vol-12345
+  #     fsType: ext4
+  #
+  #   gcePersistentDisk:     # GCP Persistent Disk
+  #     pdName: my-disk
+  #     fsType: ext4
+  #
+  #   azureDisk:             # Azure Disk
+  #     diskName: my-disk
+  #     diskURI: /subscriptions/.../disk
+  #
+  # Network:
+  #   nfs:                   # NFS
+  #     server: nfs-server.example.com
+  #     path: /exports/data
+  #
+  #   cephfs:                # CephFS (supports RWX)
+  #     monitors:
+  #       - 10.16.154.78:6789
+  #     path: /kubernetes
+  #
+  #   iscsi:                 # iSCSI
+  #     targetPortal: 10.0.2.15:3260
+  #     iqn: iqn.2001-04.com.example:storage
+  #
+  # Local:
+  #   local:                 # Local disk (high performance)
+  #     path: /mnt/disks/ssd1
+
+  # ===================
+  # NODE AFFINITY (for local volumes)
+  # ===================
+  # Required for 'local' volume type
+  # Ensures pod is scheduled on node with the volume
+  # nodeAffinity:
+  #   required:
+  #     nodeSelectorTerms:
+  #     - matchExpressions:
+  #       - key: kubernetes.io/hostname
+  #         operator: In
+  #         values:
+  #         - node-1
+
+# ===================
+# CREATING THE PV
+# ===================
+# Manual creation:
+#   kubectl apply -f k8s/advanced/storage/pv.yaml
+#
+# View PVs:
+#   kubectl get pv
+#
+# View details:
+#   kubectl describe pv app-data-pv
+#
+# Check binding:
+#   kubectl get pv app-data-pv -o yaml | grep claimRef
+#
+# Delete PV:
+#   kubectl delete pv app-data-pv
+
+# ===================
+# PV LIFECYCLE
+# ===================
+# 1. Available: Free, not bound to any PVC
+# 2. Bound: Bound to a PVC
+# 3. Released: PVC deleted, but PV not yet reclaimed
+# 4. Failed: Automatic reclamation failed
+
+# ===================
+# BINDING
+# ===================
+# PV binds to PVC when:
+#   - Capacity matches (PV >= PVC request)
+#   - Access modes match
+#   - StorageClass matches (or both empty)
+#   - Selector matches (if PVC has selector)
+#
+# Once bound, it's a 1:1 relationship (one PV to one PVC)
+
+# ===================
+# WHEN TO USE MANUAL PVs
+# ===================
+# Dynamic provisioning (automatic PV creation) is usually better!
+#
+# Use manual PVs when:
+#   - No dynamic provisioning available
+#   - Pre-provisioned storage (legacy systems)
+#   - Special storage configurations
+#   - Learning how PVs work (like this example!)
+#   - Local high-performance disks
+#
+# For production: Use dynamic provisioning with StorageClasses
+
+# ===================
+# hostPath WARNING
+# ===================
+# ⚠️  hostPath is NOT recommended for production!
+#
+# Issues:
+#   - Only works on single node
+#   - Data lost if node fails
+#   - Security risk (access to host filesystem)
+#   - Not portable across nodes
+#
+# Good for:
+#   - Development (like KIND)
+#   - Learning
+#   - Single-node clusters
+#
+# Production alternatives:
+#   - Cloud provider volumes (EBS, PD, Azure Disk)
+#   - Network storage (NFS, Ceph)
+#   - Local SSD with node affinity (for performance)
+
+# ===================
+# MONITORING
+# ===================
+# Check PV status:
+#   kubectl get pv
+#
+# Watch for binding:
+#   kubectl get pv -w
+#
+# See which PVC claimed it:
+#   kubectl get pv app-data-pv -o jsonpath='{.spec.claimRef.name}'
+#
+# Check capacity and usage:
+#   kubectl describe pv app-data-pv
+
+# ===================
+# RECLAIM PROCESS
+# ===================
+# When PVC is deleted with Retain policy:
+#
+# 1. PV status becomes "Released"
+# 2. PV still has data
+# 3. Can't be claimed by new PVC (has claimRef)
+# 4. Manual reclaim steps:
+#    a. Backup data if needed
+#    b. Delete PV: kubectl delete pv app-data-pv
+#    c. Clean underlying storage
+#    d. Recreate PV or create new one

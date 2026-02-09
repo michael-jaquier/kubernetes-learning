@@ -1,0 +1,223 @@
+# Example Deployment Using Persistent Storage
+#
+# This demonstrates how to use a PersistentVolumeClaim (PVC) in a deployment.
+# The storage persists even when pods are deleted or rescheduled.
+#
+# Use case: Any application that needs to save data (databases, file uploads,
+# logs, caches, etc.)
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: storage-demo
+  namespace: go-demo
+  labels:
+    app: storage-demo
+spec:
+  # ===================
+  # IMPORTANT: Only 1 replica for RWO volumes!
+  # ===================
+  # ReadWriteOnce volumes can only be mounted by one node at a time.
+  # Multiple replicas might schedule to different nodes, causing mount failures.
+  # For multi-replica with storage, use:
+  # - StatefulSet (each replica gets its own PVC)
+  # - ReadWriteMany volumes (if available)
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: storage-demo
+
+  template:
+    metadata:
+      labels:
+        app: storage-demo
+    spec:
+      containers:
+      - name: storage-demo
+        # Simple alpine container for testing
+        image: alpine:latest
+
+        # Keep container running
+        command: ["sh", "-c", "while true; do sleep 3600; done"]
+
+        # ===================
+        # VOLUME MOUNTS
+        # ===================
+        # Mount the persistent volume into the container
+        volumeMounts:
+        - name: persistent-storage
+          mountPath: /data           # Where to mount in container
+          # Optional settings:
+          # subPath: myapp            # Mount subdirectory only
+          # readOnly: false           # Allow writes (default)
+
+        # Optional: Resource limits
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+
+      # ===================
+      # VOLUMES
+      # ===================
+      # Define volumes available to containers
+      volumes:
+      - name: persistent-storage
+        persistentVolumeClaim:
+          claimName: app-pvc         # Reference to PVC (must exist)
+          # readOnly: false           # Allow writes (default)
+
+# ===================
+# TESTING PERSISTENCE
+# ===================
+# 1. Create the PVC:
+#    kubectl apply -f k8s/advanced/storage/pvc.yaml
+#
+# 2. Deploy this app:
+#    kubectl apply -f k8s/advanced/storage/deployment-with-storage.yaml
+#
+# 3. Write data to volume:
+#    kubectl exec -n go-demo deployment/storage-demo -- sh -c "echo 'Hello, Persistent Storage!' > /data/test.txt"
+#
+# 4. Read it back:
+#    kubectl exec -n go-demo deployment/storage-demo -- cat /data/test.txt
+#
+# 5. Delete the pod:
+#    kubectl delete pod -n go-demo -l app=storage-demo
+#
+# 6. Wait for new pod to start:
+#    kubectl wait --for=condition=ready pod -n go-demo -l app=storage-demo --timeout=60s
+#
+# 7. Read data again (it's still there!):
+#    kubectl exec -n go-demo deployment/storage-demo -- cat /data/test.txt
+#
+# Or use: make test-storage
+
+# ===================
+# REAL-WORLD EXAMPLES
+# ===================
+
+# Example 1: Database with persistent storage
+# ---
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: postgres
+# spec:
+#   replicas: 1
+#   selector:
+#     matchLabels:
+#       app: postgres
+#   template:
+#     metadata:
+#       labels:
+#         app: postgres
+#     spec:
+#       containers:
+#       - name: postgres
+#         image: postgres:15
+#         env:
+#         - name: POSTGRES_PASSWORD
+#           valueFrom:
+#             secretKeyRef:
+#               name: db-secret
+#               key: password
+#         volumeMounts:
+#         - name: postgres-storage
+#           mountPath: /var/lib/postgresql/data
+#           subPath: postgres  # Use subdirectory
+#         ports:
+#         - containerPort: 5432
+#       volumes:
+#       - name: postgres-storage
+#         persistentVolumeClaim:
+#           claimName: postgres-pvc
+
+# Example 2: File upload application
+# ---
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: file-server
+# spec:
+#   replicas: 1
+#   selector:
+#     matchLabels:
+#       app: file-server
+#   template:
+#     metadata:
+#       labels:
+#         app: file-server
+#     spec:
+#       containers:
+#       - name: file-server
+#         image: my-app:latest
+#         volumeMounts:
+#         - name: uploads
+#           mountPath: /app/uploads
+#       volumes:
+#       - name: uploads
+#         persistentVolumeClaim:
+#           claimName: uploads-pvc
+
+# ===================
+# MULTIPLE VOLUMES
+# ===================
+# You can mount multiple PVCs:
+#
+# volumeMounts:
+# - name: data-volume
+#   mountPath: /data
+# - name: logs-volume
+#   mountPath: /var/log/app
+# - name: config-volume
+#   mountPath: /etc/config
+#
+# volumes:
+# - name: data-volume
+#   persistentVolumeClaim:
+#     claimName: data-pvc
+# - name: logs-volume
+#   persistentVolumeClaim:
+#     claimName: logs-pvc
+# - name: config-volume
+#   configMap:
+#     name: app-config
+
+# ===================
+# COMMON ISSUES
+# ===================
+
+# Issue: Pod stuck in ContainerCreating
+# Check: kubectl describe pod <pod-name> -n go-demo
+# Causes:
+# - PVC not bound to PV
+# - Volume already mounted by another node (RWO limitation)
+# - Node doesn't have access to storage
+
+# Issue: "Multi-Attach error"
+# Cause: Trying to use RWO volume with multiple replicas on different nodes
+# Solution: Use replicas: 1 or ReadWriteMany volumes
+
+# Issue: No space left on device
+# Cause: Volume is full
+# Solution:
+# - Clean up old data
+# - Expand PVC (if storage class allows)
+# - Request larger PVC
+
+# ===================
+# MONITORING STORAGE
+# ===================
+# Check disk usage inside pod:
+#   kubectl exec -n go-demo deployment/storage-demo -- df -h /data
+#
+# Check PVC size:
+#   kubectl get pvc -n go-demo
+#
+# View detailed PVC info:
+#   kubectl describe pvc app-pvc -n go-demo

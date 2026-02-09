@@ -1,0 +1,151 @@
+# Persistent Volume - Local Storage Example
+#
+# A PersistentVolume (PV) represents a piece of storage in the cluster.
+# This example uses local node storage (hostPath) which is good for:
+# - Development and testing
+# - KIND/single-node clusters
+# - Learning about persistent storage
+#
+# NOTE: In production, use cloud provider volumes (EBS, GCE PD, Azure Disk)
+# or network storage (NFS, Ceph, etc.)
+#
+# Learn more: https://kubernetes.io/docs/concepts/storage/persistent-volumes/
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: local-pv
+  labels:
+    type: local
+    app: go-demo
+spec:
+  # ===================
+  # CAPACITY
+  # ===================
+  # How much storage this volume provides
+  capacity:
+    storage: 1Gi          # 1 Gibibyte (1024 MiB)
+
+  # ===================
+  # ACCESS MODES
+  # ===================
+  # How the volume can be mounted
+  # - ReadWriteOnce (RWO): Can be mounted read-write by a single node
+  # - ReadOnlyMany (ROX): Can be mounted read-only by many nodes
+  # - ReadWriteMany (RWX): Can be mounted read-write by many nodes
+  #
+  # Local volumes only support ReadWriteOnce
+  accessModes:
+    - ReadWriteOnce
+
+  # ===================
+  # RECLAIM POLICY
+  # ===================
+  # What happens to this PV when its PVC is deleted
+  # - Retain: Keep the PV and its data (manual cleanup required)
+  # - Delete: Delete the PV and its data
+  # - Recycle: Scrub data and make available again (deprecated)
+  persistentVolumeReclaimPolicy: Retain
+
+  # ===================
+  # STORAGE CLASS
+  # ===================
+  # Optional: Categorize storage types (SSD, HDD, etc.)
+  # If not specified, uses default storage class
+  # Set to "" to prevent dynamic provisioning
+  storageClassName: manual
+
+  # ===================
+  # VOLUME SOURCE
+  # ===================
+  # Where the actual storage comes from
+  # hostPath: Uses directory on the node (NOT recommended for production)
+  hostPath:
+    path: "/mnt/data"     # Directory on the KIND node
+    type: DirectoryOrCreate  # Create if doesn't exist
+
+# ===================
+# PRODUCTION ALTERNATIVES
+# ===================
+# Instead of hostPath, use:
+#
+# AWS EBS:
+#   awsElasticBlockStore:
+#     volumeID: vol-0abcd1234efgh5678
+#     fsType: ext4
+#
+# GCE Persistent Disk:
+#   gcePersistentDisk:
+#     pdName: my-data-disk
+#     fsType: ext4
+#
+# Azure Disk:
+#   azureDisk:
+#     diskName: my-disk
+#     diskURI: /subscriptions/.../myDisk
+#
+# NFS:
+#   nfs:
+#     server: nfs-server.example.com
+#     path: "/exported/path"
+#
+# Or use StorageClasses for dynamic provisioning!
+
+# ===================
+# VOLUME MODES
+# ===================
+# How the volume is consumed
+# volumeMode: Filesystem  # Default - mounted as directory
+# volumeMode: Block       # Raw block device (advanced)
+
+# ===================
+# NODE AFFINITY
+# ===================
+# For local volumes, specify which node has the storage
+# This ensures pods using this PV run on the right node
+#
+# nodeAffinity:
+#   required:
+#     nodeSelectorTerms:
+#     - matchExpressions:
+#       - key: kubernetes.io/hostname
+#         operator: In
+#         values:
+#         - node-1
+
+# ===================
+# LIFECYCLE
+# ===================
+# 1. PV is created (Available status)
+# 2. PVC claims it (Bound status)
+# 3. Pod uses PVC (storage mounted)
+# 4. PVC is deleted
+# 5. PV follows reclaim policy (Retain/Delete)
+
+# ===================
+# CHECKING STATUS
+# ===================
+# View PVs:
+#   kubectl get pv
+#
+# Detailed info:
+#   kubectl describe pv local-pv
+#
+# Watch status:
+#   kubectl get pv -w
+#
+# Expected output:
+#   NAME       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS
+#   local-pv   1Gi        RWO            Retain           Available
+#
+# After PVC binding:
+#   STATUS: Available → Bound
+
+# ===================
+# IMPORTANT NOTES
+# ===================
+# - hostPath volumes are NOT portable across nodes
+# - Data is lost if node fails (no redundancy)
+# - Use for development/testing only
+# - For production, use network storage or cloud volumes
+# - Consider using StorageClasses for dynamic provisioning
