@@ -36,10 +36,20 @@ brew install --cask docker
 # Then start Docker Desktop from Applications
 ```
 
+Or use the automated installer:
+```bash
+make install-docker
+```
+
 ### 2. Install KIND
 
 ```bash
 brew install kind
+```
+
+Or use the automated installer:
+```bash
+make install-kind
 ```
 
 ### 3. Install kubectl
@@ -48,12 +58,30 @@ brew install kind
 brew install kubectl
 ```
 
+Or use the automated installer:
+```bash
+make install-kubectl
+```
+
+**New to kubectl?** Read the [kubectl primer (KUBECTL.md)](./KUBECTL.md) for a comprehensive introduction to the Kubernetes command-line tool.
+
 ### 4. Verify installations
 
+Check individual tools:
 ```bash
 docker --version
 kind --version
 kubectl version --client
+```
+
+Or check all at once:
+```bash
+make check-all
+```
+
+Quick install everything:
+```bash
+make install-all
 ```
 
 ## Project Structure
@@ -62,6 +90,7 @@ kubectl version --client
 kind-go-nginx-demo/
 ├── README.md                 # This file
 ├── KUBERNETES.md            # Kubernetes concepts explained
+├── KUBECTL.md               # kubectl primer and command reference
 ├── Makefile                 # Build and deployment automation
 ├── kind-config.yaml         # KIND cluster configuration
 ├── local-registry.sh        # Local registry setup script
@@ -120,11 +149,13 @@ make cluster-delete
 ## Learning Path
 
 1. **Start here**: Read this README to understand KIND
-2. **Explore the code**: Check `app/main.go` to see the simple Go service
-3. **Understand containers**: Review `app/Dockerfile` to see how the app is containerized
-4. **Learn Kubernetes**: Read `KUBERNETES.md` for core concepts
-5. **Study manifests**: Explore files in `k8s/` directory
-6. **Experiment**: Modify the code, rebuild, redeploy
+2. **Check prerequisites**: Run `make check-all` to verify your setup
+3. **Learn kubectl**: Read [KUBECTL.md](./KUBECTL.md) for kubectl fundamentals
+4. **Explore the code**: Check `app/main.go` to see the simple Go service
+5. **Understand containers**: Review `app/Dockerfile` to see how the app is containerized
+6. **Learn Kubernetes**: Read [KUBERNETES.md](./KUBERNETES.md) for core concepts
+7. **Study manifests**: Explore files in `k8s/` directory (heavily commented for learning!)
+8. **Experiment**: Modify the code, rebuild, redeploy
 
 ## Common Commands
 

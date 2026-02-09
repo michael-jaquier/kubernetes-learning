@@ -24,6 +24,127 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 
+##@ Prerequisites
+
+.PHONY: check-kubectl
+check-kubectl: ## Check if kubectl is installed
+	@echo "$(CYAN)Checking for kubectl...$(NC)"
+	@if command -v kubectl >/dev/null 2>&1; then \
+		echo "$(GREEN)✓ kubectl is installed$(NC)"; \
+		kubectl version --client --output=yaml | grep gitVersion; \
+	else \
+		echo "$(RED)✗ kubectl is not installed$(NC)"; \
+		echo "$(YELLOW)Run 'make install-kubectl' to install it$(NC)"; \
+		exit 1; \
+	fi
+
+.PHONY: check-kind
+check-kind: ## Check if KIND is installed
+	@echo "$(CYAN)Checking for KIND...$(NC)"
+	@if command -v kind >/dev/null 2>&1; then \
+		echo "$(GREEN)✓ KIND is installed$(NC)"; \
+		kind version; \
+	else \
+		echo "$(RED)✗ KIND is not installed$(NC)"; \
+		echo "$(YELLOW)Run 'make install-kind' to install it$(NC)"; \
+		exit 1; \
+	fi
+
+.PHONY: check-docker
+check-docker: ## Check if Docker is running
+	@echo "$(CYAN)Checking for Docker...$(NC)"
+	@if command -v docker >/dev/null 2>&1; then \
+		if docker info >/dev/null 2>&1; then \
+			echo "$(GREEN)✓ Docker is installed and running$(NC)"; \
+			docker version --format 'Client: {{.Client.Version}} | Server: {{.Server.Version}}'; \
+		else \
+			echo "$(RED)✗ Docker is installed but not running$(NC)"; \
+			echo "$(YELLOW)Start Docker Desktop and try again$(NC)"; \
+			exit 1; \
+		fi \
+	else \
+		echo "$(RED)✗ Docker is not installed$(NC)"; \
+		echo "$(YELLOW)Run 'make install-docker' to install it$(NC)"; \
+		exit 1; \
+	fi
+
+.PHONY: check-all
+check-all: check-docker check-kind check-kubectl ## Check all prerequisites
+	@echo ""
+	@echo "$(GREEN)========================================$(NC)"
+	@echo "$(GREEN)✓ All prerequisites are installed!$(NC)"
+	@echo "$(GREEN)========================================$(NC)"
+	@echo ""
+	@echo "$(CYAN)You're ready to go! Try:$(NC)"
+	@echo "  $(GREEN)make up$(NC)         - Complete setup"
+	@echo "  $(GREEN)make help$(NC)       - See all commands"
+
+.PHONY: install-kubectl
+install-kubectl: ## Install kubectl via Homebrew
+	@echo "$(CYAN)Installing kubectl...$(NC)"
+	@if command -v kubectl >/dev/null 2>&1; then \
+		echo "$(YELLOW)kubectl is already installed$(NC)"; \
+		kubectl version --client; \
+	elif command -v brew >/dev/null 2>&1; then \
+		echo "$(CYAN)Installing via Homebrew...$(NC)"; \
+		brew install kubectl; \
+		echo "$(GREEN)✓ kubectl installed successfully$(NC)"; \
+	else \
+		echo "$(RED)Homebrew not found. Installing manually...$(NC)"; \
+		curl -LO "https://dl.k8s.io/release/$$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/darwin/arm64/kubectl"; \
+		chmod +x kubectl; \
+		sudo mv kubectl /usr/local/bin/; \
+		echo "$(GREEN)✓ kubectl installed to /usr/local/bin/kubectl$(NC)"; \
+	fi
+	@kubectl version --client
+
+.PHONY: install-kind
+install-kind: ## Install KIND via Homebrew
+	@echo "$(CYAN)Installing KIND...$(NC)"
+	@if command -v kind >/dev/null 2>&1; then \
+		echo "$(YELLOW)KIND is already installed$(NC)"; \
+		kind version; \
+	elif command -v brew >/dev/null 2>&1; then \
+		echo "$(CYAN)Installing via Homebrew...$(NC)"; \
+		brew install kind; \
+		echo "$(GREEN)✓ KIND installed successfully$(NC)"; \
+	else \
+		echo "$(RED)Homebrew not found. Installing manually...$(NC)"; \
+		curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-darwin-arm64; \
+		chmod +x ./kind; \
+		sudo mv ./kind /usr/local/bin/kind; \
+		echo "$(GREEN)✓ KIND installed to /usr/local/bin/kind$(NC)"; \
+	fi
+	@kind version
+
+.PHONY: install-docker
+install-docker: ## Install Docker Desktop via Homebrew
+	@echo "$(CYAN)Installing Docker Desktop...$(NC)"
+	@if command -v docker >/dev/null 2>&1; then \
+		echo "$(YELLOW)Docker is already installed$(NC)"; \
+		docker --version; \
+		echo "$(YELLOW)If Docker is not running, start Docker Desktop from Applications$(NC)"; \
+	elif command -v brew >/dev/null 2>&1; then \
+		echo "$(CYAN)Installing via Homebrew...$(NC)"; \
+		brew install --cask docker; \
+		echo "$(GREEN)✓ Docker Desktop installed$(NC)"; \
+		echo "$(YELLOW)Please start Docker Desktop from Applications and run 'make check-docker' again$(NC)"; \
+	else \
+		echo "$(RED)Homebrew not found$(NC)"; \
+		echo "$(YELLOW)Please install Docker Desktop manually from: https://www.docker.com/products/docker-desktop$(NC)"; \
+		exit 1; \
+	fi
+
+.PHONY: install-all
+install-all: ## Install all prerequisites (Docker, KIND, kubectl)
+	@echo "$(CYAN)Installing all prerequisites...$(NC)"
+	@make install-docker || true
+	@make install-kind || true
+	@make install-kubectl || true
+	@echo ""
+	@echo "$(GREEN)Installation complete! Verifying...$(NC)"
+	@make check-all
+
 ##@ Cluster Management
 
 .PHONY: cluster-create
