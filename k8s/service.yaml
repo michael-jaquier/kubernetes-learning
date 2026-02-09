@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-app-service
+  namespace: go-demo
+  labels:
+    app: go-app
+spec:
+  # Service type - ClusterIP is internal only, NodePort exposes on node ports
+  type: ClusterIP
+
+  # Selector - routes traffic to pods with these labels
+  selector:
+    app: go-app
+
+  # Ports configuration
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80          # Service port (what other services call)
+    targetPort: http  # Container port (named port from deployment)
+
+  # Session affinity - None means round-robin load balancing
+  sessionAffinity: None

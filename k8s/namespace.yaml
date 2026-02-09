@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: go-demo
+  labels:
+    name: go-demo
+    purpose: learning
+    app: go-demo

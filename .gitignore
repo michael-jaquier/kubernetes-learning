@@ -1,0 +1,38 @@
+# Ignore build artifacts
+app/app
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Ignore test binary
+*.test
+
+# Ignore output files
+*.out
+
+# Ignore IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore temporary files
+*.tmp
+*.log
+
+# Ignore Kubernetes secrets (if any)
+k8s/secrets/
+
+# Ignore local kubeconfig
+kubeconfig
+*.kubeconfig
+
+# Ignore Docker volumes
+volumes/

@@ -1,0 +1,60 @@
+# KIND cluster configuration with local registry support
+#
+# This configuration creates a Kubernetes cluster with:
+# - 1 control plane node
+# - 2 worker nodes
+# - Port mappings for accessing services
+# - Registry configuration for local development
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+
+# Cluster name
+name: kind
+
+# Nodes configuration
+nodes:
+  # Control plane node
+  - role: control-plane
+    kubeadmConfigPatches:
+    - |
+      kind: InitConfiguration
+      nodeRegistration:
+        kubeletExtraArgs:
+          node-labels: "ingress-ready=true"
+    extraPortMappings:
+    # Port 80 -> 30080 (for Ingress/NodePort services)
+    - containerPort: 30080
+      hostPort: 80
+      protocol: TCP
+    # Port 443 -> 30443 (for HTTPS Ingress)
+    - containerPort: 30443
+      hostPort: 443
+      protocol: TCP
+
+  # Worker node 1
+  - role: worker
+
+  # Worker node 2
+  - role: worker
+
+# Configure containerd to use the local registry
+# This allows pulling images from localhost:5001
+containerdConfigPatches:
+- |-
+  [plugins."io.containerd.grpc.v1.cri".registry.mirrors."localhost:5001"]
+    endpoint = ["http://kind-registry:5001"]
+  [plugins."io.containerd.grpc.v1.cri".registry.configs."kind-registry:5001".tls]
+    insecure_skip_verify = true
+
+# Networking configuration
+networking:
+  # Cluster pod subnet
+  podSubnet: "10.244.0.0/16"
+  # Cluster service subnet
+  serviceSubnet: "10.96.0.0/12"
+  # Disable default CNI (we'll use kindnet which is included)
+  disableDefaultCNI: false
+  # API server configuration
+  apiServerAddress: "127.0.0.1"
+  apiServerPort: 6443
