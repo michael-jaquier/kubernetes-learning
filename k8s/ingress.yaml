@@ -1,34 +1,82 @@
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+# Ingress: HTTP(S) routing from outside the cluster to services inside
+#
+# Problem: Services give you stable endpoints INSIDE the cluster, but how do
+# external users access your application? You could use LoadBalancer services,
+# but that creates one cloud load balancer per service (expensive!).
+#
+# Solution: Ingress acts as a single entry point that routes HTTP/HTTPS traffic
+# to multiple services based on rules (hostname, path, etc.). Think of it as a
+# smart reverse proxy or application load balancer.
+#
+# Requires: An Ingress Controller (like nginx-ingress) to actually implement
+# the routing rules. KIND doesn't include one by default - you'd need to install
+# it separately for this to work.
+#
+# Learn more: https://kubernetes.io/docs/concepts/services-networking/ingress/
+
+apiVersion: networking.k8s.io/v1  # Ingress API version
+kind: Ingress                      # Resource type - HTTP routing rules
 metadata:
-  name: go-app-ingress
-  namespace: go-demo
+  name: go-app-ingress             # Ingress resource name
+  namespace: go-demo               # Must be in same namespace as the service
   labels:
     app: go-app
+
+  # ===================
+  # ANNOTATIONS
+  # ===================
+  # Annotations configure Ingress Controller behavior
+  # These are specific to nginx-ingress (other controllers have different annotations)
   annotations:
-    # Ingress class (use default for KIND)
+    # Specify which Ingress Controller should handle this
     kubernetes.io/ingress.class: "nginx"
-    # Rewrite rules
+
+    # URL rewriting - modifies the request path before sending to backend
+    # Example: /api/users → / (rewrites path)
     nginx.ingress.kubernetes.io/rewrite-target: /
-    # SSL redirect (disable for local development)
+
+    # Disable HTTPS redirect (useful for local development)
+    # In production, you'd want: "true" to force HTTPS
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
+
+    # Other common annotations:
+    # nginx.ingress.kubernetes.io/rate-limit: "100"  # Rate limiting
+    # nginx.ingress.kubernetes.io/cors-allow-origin: "*"  # CORS
+    # cert-manager.io/cluster-issuer: "letsencrypt"  # Auto TLS certs
+
 spec:
-  # Ingress rules
+  # ===================
+  # ROUTING RULES
+  # ===================
+  # Rules define how traffic is routed based on hostname and path
   rules:
-  # Default rule - match all hosts
+  # Rule 1: Default - matches ALL hostnames
+  # This catches any request that doesn't match other rules
   - http:
       paths:
-      - path: /
-        pathType: Prefix
-        backend:
+      - path: /             # URL path to match
+        pathType: Prefix    # Match type:
+                           #   Prefix: Matches /path and /path/*
+                           #   Exact: Matches /path only
+                           #   ImplementationSpecific: Depends on controller
+        backend:           # Where to send matching traffic
           service:
-            name: go-app-service
+            name: go-app-service  # Service name (must exist in same namespace)
             port:
-              number: 80
+              number: 80   # Service port (not pod port!)
 
-  # Optional: Named host rule
-  # Uncomment and add "127.0.0.1 go-app.local" to /etc/hosts to use
-  # - host: go-app.local
+  # ===================
+  # HOSTNAME-BASED ROUTING (commented out example)
+  # ===================
+  # Uncomment to route based on hostname
+  # Useful for hosting multiple apps on one IP:
+  #   - app1.example.com → service1
+  #   - app2.example.com → service2
+  #
+  # To use locally, add to /etc/hosts:
+  #   127.0.0.1 go-app.local
+  #
+  # - host: go-app.local   # Only match requests to this hostname
   #   http:
   #     paths:
   #     - path: /
@@ -39,9 +87,86 @@ spec:
   #           port:
   #             number: 80
 
-# Optional: TLS configuration
-# Requires cert-manager or manual secret creation
-# tls:
-# - hosts:
-#   - go-app.local
-#   secretName: go-app-tls
+  # ===================
+  # PATH-BASED ROUTING (example)
+  # ===================
+  # You can also route different paths to different services:
+  #
+  # - http:
+  #     paths:
+  #     - path: /api       # Routes /api/* to API service
+  #       pathType: Prefix
+  #       backend:
+  #         service:
+  #           name: api-service
+  #           port:
+  #             number: 80
+  #     - path: /web       # Routes /web/* to frontend service
+  #       pathType: Prefix
+  #       backend:
+  #         service:
+  #           name: web-service
+  #           port:
+  #             number: 80
+
+  # ===================
+  # TLS/HTTPS CONFIGURATION (commented out example)
+  # ===================
+  # Enable HTTPS with TLS certificates
+  # Requires a Secret containing the certificate and key
+  #
+  # tls:
+  # - hosts:
+  #   - go-app.local          # Hostname for certificate
+  #   secretName: go-app-tls  # Secret containing tls.crt and tls.key
+  #
+  # Create secret manually:
+  #   kubectl create secret tls go-app-tls \
+  #     --cert=path/to/cert.pem \
+  #     --key=path/to/key.pem
+  #
+  # Or use cert-manager for automatic Let's Encrypt certificates:
+  #   https://cert-manager.io/
+
+# ===================
+# HOW TRAFFIC FLOWS
+# ===================
+# External Request → Ingress Controller → Ingress Rules → Service → Pod
+#
+# Example flow:
+# 1. User visits http://go-app.local/
+# 2. DNS resolves to Ingress Controller's IP
+# 3. Ingress Controller receives request
+# 4. Looks up Ingress resource matching host "go-app.local"
+# 5. Applies routing rules (path matching)
+# 6. Forwards to Service: go-app-service:80
+# 7. Service load balances to a healthy Pod
+# 8. Pod processes request and returns response
+
+# ===================
+# INSTALLING INGRESS CONTROLLER (for KIND)
+# ===================
+# KIND doesn't include an Ingress Controller by default.
+# To install nginx-ingress:
+#
+#   kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+#
+# Wait for it to be ready:
+#   kubectl wait --namespace ingress-nginx \
+#     --for=condition=ready pod \
+#     --selector=app.kubernetes.io/component=controller \
+#     --timeout=90s
+#
+# Then this Ingress will start working!
+
+# ===================
+# TESTING THE INGRESS
+# ===================
+# Get Ingress details:
+#   kubectl describe ingress go-app-ingress -n go-demo
+#
+# Test with curl:
+#   curl http://localhost/  (if using KIND port mapping)
+#
+# With hostname:
+#   curl -H "Host: go-app.local" http://localhost/

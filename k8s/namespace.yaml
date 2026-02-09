@@ -1,8 +1,22 @@
-apiVersion: v1
-kind: Namespace
+# Namespace: Provides isolation and organization for Kubernetes resources
+#
+# Think of a namespace as a virtual cluster within your physical cluster.
+# It's like having separate folders to organize your files - each namespace
+# keeps resources isolated from other namespaces.
+#
+# Why use namespaces?
+# - Separate environments (dev, staging, production)
+# - Isolate teams or projects on shared clusters
+# - Apply different resource quotas and policies per namespace
+# - Avoid naming conflicts between resources
+#
+# Learn more: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+
+apiVersion: v1              # API version for this resource type
+kind: Namespace             # Resource type - creates a new namespace
 metadata:
-  name: go-demo
-  labels:
-    name: go-demo
-    purpose: learning
-    app: go-demo
+  name: go-demo             # Name of the namespace - all our resources will go here
+  labels:                   # Labels are key-value pairs for organizing and selecting resources
+    name: go-demo           # Label matching the namespace name (convention)
+    purpose: learning       # Custom label indicating this is for learning
+    app: go-demo            # Application identifier - useful for queries and monitoring

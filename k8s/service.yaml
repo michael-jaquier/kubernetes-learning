@@ -1,24 +1,123 @@
-apiVersion: v1
-kind: Service
+# Service: Provides stable network access to a set of Pods
+#
+# Problem: Pods are ephemeral - they can be killed and recreated at any time.
+# Each time a pod is recreated, it gets a NEW IP address. How do other parts
+# of your application reliably connect to your pods?
+#
+# Solution: A Service provides a STABLE IP address and DNS name that doesn't
+# change, even as pods come and go. The Service automatically routes traffic
+# to healthy pods matching its selector.
+#
+# Think of it as a load balancer that automatically discovers and routes to
+# the right pods.
+#
+# Learn more: https://kubernetes.io/docs/concepts/services-networking/service/
+
+apiVersion: v1              # API version for Service resources
+kind: Service               # Resource type - creates a stable network endpoint
 metadata:
-  name: go-app-service
-  namespace: go-demo
-  labels:
+  name: go-app-service      # Service name - this becomes the DNS name
+                           # Accessible as: go-app-service.go-demo.svc.cluster.local
+  namespace: go-demo        # Which namespace this service lives in
+  labels:                   # Labels for the service itself (not the selector)
     app: go-app
 spec:
-  # Service type - ClusterIP is internal only, NodePort exposes on node ports
-  type: ClusterIP
+  # ===================
+  # SERVICE TYPE
+  # ===================
+  # Type determines how the service is exposed:
+  #
+  # ClusterIP (default): Only accessible INSIDE the cluster
+  #   - Use for internal microservices
+  #   - Gets a cluster-internal IP
+  #   - Other pods can access via service name or IP
+  #
+  # NodePort: Exposes on each Node's IP at a static port (30000-32767)
+  #   - Use for development or when you don't have a load balancer
+  #   - Accessible from outside: <NodeIP>:<NodePort>
+  #
+  # LoadBalancer: Creates a cloud provider's load balancer
+  #   - Use in production on cloud platforms (AWS, GCP, Azure)
+  #   - Gets an external IP
+  #
+  # ExternalName: Maps to a DNS name (advanced use case)
+  #
+  # Learn more: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
+  type: ClusterIP           # Internal only - accessed through Ingress or port-forward
 
-  # Selector - routes traffic to pods with these labels
+  # ===================
+  # POD SELECTOR
+  # ===================
+  # This is HOW the Service finds which pods to send traffic to
+  # It matches pods with ALL these labels (AND operation)
   selector:
-    app: go-app
+    app: go-app             # Route traffic to pods labeled 'app=go-app'
+                           # This must match the labels in deployment.yaml
 
-  # Ports configuration
+  # How it works:
+  # 1. Service continuously watches for pods with matching labels
+  # 2. Maintains a list of healthy pod IPs (endpoints)
+  # 3. Load balances traffic across these endpoints
+  # 4. Automatically updates when pods are added/removed
+
+  # ===================
+  # PORT CONFIGURATION
+  # ===================
+  # Define how traffic is routed from the service to pods
   ports:
-  - name: http
-    protocol: TCP
-    port: 80          # Service port (what other services call)
-    targetPort: http  # Container port (named port from deployment)
+  - name: http              # Port name (optional but recommended)
+    protocol: TCP           # TCP or UDP
+    port: 80                # Service port - what OTHER services use to connect
+                           # Example: curl http://go-app-service:80
+    targetPort: http        # Container port - where traffic is sent in the pod
+                           # We use the named port 'http' from deployment.yaml
+                           # Could also use a number: targetPort: 8080
 
-  # Session affinity - None means round-robin load balancing
-  sessionAffinity: None
+  # Flow of traffic:
+  # Client → Service IP:80 → Pod IP:8080
+  #
+  # Why different ports?
+  # - Standard convention: Services often use standard ports (80, 443)
+  # - Flexibility: Container can listen on any port
+  # - Abstraction: Change container port without changing how clients connect
+
+  # ===================
+  # SESSION AFFINITY
+  # ===================
+  # Controls if requests from same client go to same pod
+  sessionAffinity: None     # Round-robin load balancing (each request may go to different pod)
+                           # Alternative: ClientIP - same client always goes to same pod
+                           # (useful for stateful apps or when you need session stickiness)
+
+  # Note: For web apps with sessions, it's better to use:
+  # - Stateless design with external session storage (Redis, DB)
+  # - Rather than relying on sessionAffinity
+
+# ===================
+# SERVICE DISCOVERY
+# ===================
+# Once created, this service is discoverable by:
+#
+# 1. DNS name (recommended):
+#    - Short form (same namespace): http://go-app-service
+#    - Full form: http://go-app-service.go-demo.svc.cluster.local
+#
+# 2. Environment variables (legacy):
+#    - GO_APP_SERVICE_SERVICE_HOST=<cluster-ip>
+#    - GO_APP_SERVICE_SERVICE_PORT=80
+#
+# 3. Direct IP (not recommended - can change):
+#    - kubectl get svc -n go-demo to see ClusterIP
+
+# ===================
+# TESTING THE SERVICE
+# ===================
+# From inside the cluster:
+#   kubectl run test-pod --image=curlimages/curl:latest --rm -it -- curl http://go-app-service.go-demo
+#
+# From outside (port-forward):
+#   kubectl port-forward -n go-demo service/go-app-service 8080:80
+#   curl http://localhost:8080
+#
+# View endpoints:
+#   kubectl get endpoints -n go-demo go-app-service
