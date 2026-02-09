@@ -340,6 +340,64 @@ test-api: ## Test API endpoint
 	@kubectl run test-pod --image=curlimages/curl:latest --rm -it --restart=Never -n $(NAMESPACE) -- \
 		curl -s http://go-app-service/api/info | head -20
 
+.PHONY: test-configmap
+test-configmap: ## Test ConfigMap is loaded in pods
+	@echo "$(CYAN)Testing ConfigMap environment variables...$(NC)"
+	@echo ""
+	@if kubectl get configmap app-config -n $(NAMESPACE) >/dev/null 2>&1; then \
+		echo "$(GREEN)✓ ConfigMap 'app-config' exists$(NC)"; \
+		echo ""; \
+		echo "$(CYAN)ConfigMap contents:$(NC)"; \
+		kubectl get configmap app-config -n $(NAMESPACE) -o yaml | grep -A 10 "^data:"; \
+		echo ""; \
+		echo "$(CYAN)Checking environment variables in pods...$(NC)"; \
+		POD=$$(kubectl get pod -n $(NAMESPACE) -l app=go-app -o jsonpath='{.items[0].metadata.name}'); \
+		echo "Testing pod: $$POD"; \
+		echo ""; \
+		kubectl exec -n $(NAMESPACE) $$POD -- env | grep -E "(APP_ENV|LOG_LEVEL|FEATURE_NEW_UI|MAX_CONNECTIONS)" || \
+			(echo "$(YELLOW)⚠ ConfigMap env vars not found. Did you update deployment.yaml?$(NC)" && \
+			 echo "$(YELLOW)  See k8s/advanced/deployment-with-config.yaml for example$(NC)"); \
+		echo ""; \
+		echo "$(CYAN)Checking mounted config files...$(NC)"; \
+		kubectl exec -n $(NAMESPACE) $$POD -- ls -la /etc/config 2>/dev/null || \
+			echo "$(YELLOW)⚠ No config volume mounted$(NC)"; \
+	else \
+		echo "$(RED)✗ ConfigMap 'app-config' not found$(NC)"; \
+		echo "$(YELLOW)Create it with: kubectl apply -f k8s/advanced/configmap.yaml$(NC)"; \
+	fi
+
+.PHONY: test-secrets
+test-secrets: ## Test Secrets are loaded in pods
+	@echo "$(CYAN)Testing Secret environment variables...$(NC)"
+	@echo ""
+	@if kubectl get secret app-secrets -n $(NAMESPACE) >/dev/null 2>&1; then \
+		echo "$(GREEN)✓ Secret 'app-secrets' exists$(NC)"; \
+		echo ""; \
+		echo "$(CYAN)Secret keys (values hidden):$(NC)"; \
+		kubectl get secret app-secrets -n $(NAMESPACE) -o jsonpath='{.data}' | jq 'keys'; \
+		echo ""; \
+		echo "$(CYAN)Checking environment variables in pods...$(NC)"; \
+		POD=$$(kubectl get pod -n $(NAMESPACE) -l app=go-app -o jsonpath='{.items[0].metadata.name}'); \
+		echo "Testing pod: $$POD"; \
+		echo ""; \
+		echo "$(YELLOW)Note: Showing that secrets exist, not their values (security best practice)$(NC)"; \
+		kubectl exec -n $(NAMESPACE) $$POD -- sh -c 'env | grep -E "(DB_PASSWORD|API_KEY|JWT_SECRET|ADMIN_USER)" | cut -d= -f1' || \
+			(echo "$(YELLOW)⚠ Secret env vars not found. Did you update deployment.yaml?$(NC)" && \
+			 echo "$(YELLOW)  See k8s/advanced/deployment-with-config.yaml for example$(NC)"); \
+		echo ""; \
+		echo "$(CYAN)Checking mounted secret files...$(NC)"; \
+		kubectl exec -n $(NAMESPACE) $$POD -- ls -la /etc/secrets 2>/dev/null || \
+			echo "$(YELLOW)⚠ No secrets volume mounted$(NC)"; \
+		echo ""; \
+		echo "$(GREEN)✓ Secrets test complete$(NC)"; \
+	else \
+		echo "$(RED)✗ Secret 'app-secrets' not found$(NC)"; \
+		echo "$(YELLOW)Create it with: kubectl apply -f k8s/advanced/secret.yaml$(NC)"; \
+	fi
+
+.PHONY: test-all
+test-all: test-health test-api ## Run all tests
+
 ##@ Quick Start
 
 .PHONY: up

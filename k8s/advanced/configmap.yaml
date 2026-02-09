@@ -1,0 +1,89 @@
+# ConfigMap Example
+#
+# ConfigMaps store non-sensitive configuration data as key-value pairs.
+# They decouple configuration from container images, making apps more portable.
+#
+# Use cases:
+# - Environment variables
+# - Command-line arguments
+# - Configuration files
+# - Feature flags
+#
+# Learn more: https://kubernetes.io/docs/concepts/configuration/configmap/
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: go-demo
+  labels:
+    app: go-app
+data:
+  # Simple key-value pairs
+  # These become environment variables in your pods
+  APP_ENV: "production"
+  LOG_LEVEL: "debug"
+  FEATURE_NEW_UI: "true"
+  MAX_CONNECTIONS: "100"
+
+  # You can also store entire files
+  app.properties: |
+    server.port=8080
+    server.timeout=30
+    cache.enabled=true
+    cache.ttl=3600
+
+# ===================
+# USING IN DEPLOYMENT
+# ===================
+# Add to deployment.yaml containers section:
+#
+# Method 1: Load all as environment variables
+# envFrom:
+# - configMapRef:
+#     name: app-config
+#
+# Method 2: Load specific keys
+# env:
+# - name: APP_ENV
+#   valueFrom:
+#     configMapKeyRef:
+#       name: app-config
+#       key: APP_ENV
+#
+# Method 3: Mount as files (for app.properties)
+# volumeMounts:
+# - name: config
+#   mountPath: /etc/config
+# volumes:
+# - name: config
+#   configMap:
+#     name: app-config
+
+# ===================
+# CREATING/UPDATING
+# ===================
+# From file:
+#   kubectl create configmap app-config --from-file=config.yaml
+#
+# From literal values:
+#   kubectl create configmap app-config --from-literal=APP_ENV=production
+#
+# Apply this file:
+#   kubectl apply -f k8s/advanced/configmap.yaml
+#
+# Update existing (pods need restart to see changes):
+#   kubectl apply -f k8s/advanced/configmap.yaml
+#   kubectl rollout restart deployment/go-app -n go-demo
+
+# ===================
+# VIEWING
+# ===================
+# View all ConfigMaps:
+#   kubectl get configmaps -n go-demo
+#
+# View details:
+#   kubectl describe configmap app-config -n go-demo
+#
+# View as YAML:
+#   kubectl get configmap app-config -n go-demo -o yaml

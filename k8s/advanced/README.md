@@ -4,7 +4,92 @@ This directory contains advanced configurations that are **optional** for the ba
 
 ## Contents
 
-### ingress.yaml - HTTP Routing with Ingress
+### 1. ConfigMaps - Configuration Management
+
+**File:** `configmap.yaml`
+
+**What it does:** Stores non-sensitive configuration data (environment variables, config files).
+
+**Why use it:**
+- Decouple configuration from container images
+- Change config without rebuilding images
+- Share configuration across multiple pods
+- Store entire configuration files
+
+**Try it:**
+```bash
+# 1. Create the ConfigMap
+kubectl apply -f k8s/advanced/configmap.yaml
+
+# 2. Update your deployment to use it (see deployment-with-config.yaml for examples)
+
+# 3. Test it's working
+make test-configmap
+```
+
+**Learn more:**
+- [Kubernetes ConfigMaps](https://kubernetes.io/docs/concepts/configuration/configmap/)
+- See `deployment-with-config.yaml` for usage examples
+
+---
+
+### 2. Secrets - Sensitive Data Management
+
+**File:** `secret.yaml`
+
+**What it does:** Stores sensitive data like passwords, API keys, tokens.
+
+**Why use it:**
+- Separate secrets from code (never commit secrets to git!)
+- Base64 encoded (not encrypted by default)
+- Can be encrypted at rest with additional configuration
+- Fine-grained access control with RBAC
+
+**Try it:**
+```bash
+# 1. Create the Secret
+kubectl apply -f k8s/advanced/secret.yaml
+
+# 2. Update your deployment to use it (see deployment-with-config.yaml for examples)
+
+# 3. Test it's working
+make test-secrets
+```
+
+**Security notes:**
+- This is a demo secret with fake values
+- In production, use external secret managers (Vault, AWS Secrets Manager, etc.)
+- Never commit real secrets to git
+- Enable encryption at rest
+
+**Learn more:**
+- [Kubernetes Secrets](https://kubernetes.io/docs/concepts/configuration/secret/)
+- [Secrets Best Practices](https://kubernetes.io/docs/concepts/security/secrets-good-practices/)
+
+---
+
+### 3. Deployment with Config - Complete Example
+
+**File:** `deployment-with-config.yaml`
+
+**What it does:** Shows how to use ConfigMaps and Secrets in your deployment.
+
+**Contains examples of:**
+- Loading specific keys as environment variables
+- Loading all keys with `envFrom`
+- Mounting ConfigMaps as files
+- Mounting Secrets as files
+- Best practices and security considerations
+
+**How to use:**
+1. Review the file to understand the patterns
+2. Copy relevant sections to `k8s/deployment.yaml`
+3. Apply your updated deployment
+4. Test with `make test-configmap` and `make test-secrets`
+
+---
+
+### 4. Ingress - HTTP Routing (Optional)
 
 **What it does:** Routes external HTTP traffic to services based on hostname/path rules.
 
